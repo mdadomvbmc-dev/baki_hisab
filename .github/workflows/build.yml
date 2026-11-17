@@ -1,0 +1,89 @@
+# GitHub repo তে এই ফাইলটি .github/workflows/build.yml নামে রাখুন
+# আর প্রজেক্টের ZIP ফাইলটি repo এর root এ আপলোড করুন। বাকি সব অটো।
+name: Build & Release
+on:
+  push: {branches: [main, master]}
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  prep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ZIP extract
+        run: |
+          ZIP=$(find . -maxdepth 1 -name '*.zip' | head -n1)
+          if [ -z "$ZIP" ]; then echo "::error::repo এর root এ কোনো .zip ফাইল নেই"; exit 1; fi
+          rm -rf /tmp/x && mkdir /tmp/x && unzip -q "$ZIP" -d /tmp/x
+          P=$(find /tmp/x -name pubspec.yaml -not -path '*__MACOSX*' | head -n1)
+          if [ -z "$P" ]; then echo "::error::ZIP এর ভেতরে pubspec.yaml নেই"; exit 1; fi
+          mkdir -p src && cp -r "$(dirname "$P")"/. src/
+          sed -i "s#OWNER/REPO#${{ github.repository }}#" src/lib/main.dart
+      - uses: actions/upload-artifact@v4
+        with: {name: src, path: src, include-hidden-files: true}
+
+  android:
+    needs: prep
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: app}}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: src, path: app}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: subosito/flutter-action@v2
+        with: {channel: stable, cache: true}
+      - run: flutter create . --platforms=android --org com.sobuj --project-name baki_hisab
+      - run: python3 tools/patch_android.py
+      - run: flutter pub get
+      - run: dart run flutter_launcher_icons -f icons_android.yaml
+      - run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+      - uses: actions/upload-artifact@v4
+        with: {name: BakiHisab-apk, path: app/build/app/outputs/flutter-apk/app-release.apk}
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: বাকি হিসাব v1.0.${{ github.run_number }}
+          files: app/build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    needs: [prep, android]
+    runs-on: windows-latest
+    defaults: {run: {working-directory: app}}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: src, path: app}
+      - uses: subosito/flutter-action@v2
+        with: {channel: stable, cache: true}
+      - run: flutter create . --platforms=windows --org com.sobuj --project-name baki_hisab
+      - run: flutter pub get
+      - run: dart run flutter_launcher_icons -f icons_windows.yaml
+      - run: flutter build windows --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+      - run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath BakiHisab-windows.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          files: app/BakiHisab-windows.zip
+
+  ios:
+    needs: [prep, android]
+    runs-on: macos-latest
+    defaults: {run: {working-directory: app}}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: src, path: app}
+      - uses: subosito/flutter-action@v2
+        with: {channel: stable, cache: true}
+      - run: flutter create . --platforms=ios --org com.sobuj --project-name baki_hisab
+      - run: sed -i '' "s/^# platform :ios, .*/platform :ios, '13.0'/" ios/Podfile
+      - run: flutter pub get
+      - run: dart run flutter_launcher_icons -f icons_ios.yaml
+      - run: flutter build ios --release --no-codesign --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+      - run: |
+          mkdir Payload && cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -qr BakiHisab-ios-unsigned.ipa Payload
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          files: app/BakiHisab-ios-unsigned.ipa
