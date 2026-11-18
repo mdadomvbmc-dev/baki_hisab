@@ -51,6 +51,9 @@ jobs:
     needs: [prep, android]
     runs-on: windows-latest
     defaults: {run: {working-directory: app}}
+    env:
+      # Firebase C++ SDK এর পুরনো CMake সেটিং নতুন CMake 4.x এর সাথে চালানোর জন্য
+      CMAKE_POLICY_VERSION_MINIMUM: '3.5'
     steps:
       - uses: actions/download-artifact@v4
         with: {name: src, path: app}
