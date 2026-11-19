@@ -44,6 +44,9 @@ jobs:
       - run: python3 tools/patch_android.py
       - run: flutter pub get
       - run: dart run flutter_launcher_icons -f icons_android.yaml
+      - name: Splash screen (লোগো)
+        continue-on-error: true
+        run: dart run flutter_native_splash:create --path=splash_android.yaml
       - run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
       - run: cp build/app/outputs/flutter-apk/app-release.apk DharDena.apk
       - uses: actions/upload-artifact@v4
@@ -74,6 +77,9 @@ jobs:
         run: |
           sed -i 's/set(BINARY_NAME "baki_hisab")/set(BINARY_NAME "DharDena")/' windows/CMakeLists.txt
           sed -i 's/L"baki_hisab"/L"Dhar Dena"/' windows/runner/main.cpp
+          # FIX: firebase_auth প্লাগিনের C4238 warning /WX এর কারণে error হচ্ছিল
+          sed -i 's#/WX#/WX-#g' windows/CMakeLists.txt
+          grep -n 'WX' windows/CMakeLists.txt
       - run: flutter pub get
       - run: dart run flutter_launcher_icons -f icons_windows.yaml
       - run: flutter build windows --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
@@ -97,6 +103,9 @@ jobs:
       - run: flutter create . --platforms=web --org com.sobuj --project-name baki_hisab
       - run: flutter pub get
       - run: dart run flutter_launcher_icons -f icons_web.yaml
+      - name: Splash screen (লোগো)
+        continue-on-error: true
+        run: dart run flutter_native_splash:create --path=splash_web.yaml
       - name: Web title ও নাম
         run: |
           sed -i 's#<title>.*</title>#<title>Dhar Dena - ধার দেনা</title>#' web/index.html
@@ -143,6 +152,9 @@ jobs:
       - run: sed -i '' "s/^# platform :ios, .*/platform :ios, '13.0'/" ios/Podfile
       - run: flutter pub get
       - run: dart run flutter_launcher_icons -f icons_ios.yaml
+      - name: Splash screen (লোগো)
+        continue-on-error: true
+        run: dart run flutter_native_splash:create --path=splash_ios.yaml
       - run: flutter build ios --release --no-codesign --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
       - run: |
           mkdir Payload && cp -r build/ios/iphoneos/Runner.app Payload/
